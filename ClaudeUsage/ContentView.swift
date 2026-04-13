@@ -238,7 +238,7 @@ struct ContentView: View {
         HStack(spacing: 1) {
             ForEach(AppLanguage.allCases, id: \.self) { lang in
                 pillButton(
-                    label: lang.rawValue.uppercased(),
+                    label: "\(lang.flag) \(lang.rawValue.uppercased())",
                     isSelected: languageRaw == lang.rawValue
                 ) {
                     languageRaw = lang.rawValue

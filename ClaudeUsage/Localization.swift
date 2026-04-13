@@ -7,6 +7,8 @@ enum AppLanguage: String, CaseIterable, Codable {
     case german = "de"
     case dutch = "nl"
     case serbian = "sr"
+    case austrian = "at"
+    case newZealand = "nz"
 
     var displayName: String {
         switch self {
@@ -14,6 +16,28 @@ enum AppLanguage: String, CaseIterable, Codable {
         case .german: return "Deutsch"
         case .dutch: return "Nederlands"
         case .serbian: return "Српски"
+        case .austrian: return "Österreichisch"
+        case .newZealand: return "New Zealandian"
+        }
+    }
+
+    var flag: String {
+        switch self {
+        case .english: return "🇬🇧"
+        case .german: return "🇩🇪"
+        case .dutch: return "🇳🇱"
+        case .serbian: return "🇷🇸"
+        case .austrian: return "🇦🇹"
+        case .newZealand: return "🇳🇿"
+        }
+    }
+
+    /// The language whose translations this variant uses.
+    var translationSource: AppLanguage {
+        switch self {
+        case .austrian: return .german
+        case .newZealand: return .english
+        default: return self
         }
     }
 }
@@ -125,7 +149,7 @@ enum L {
     // MARK: - Lookup
 
     private static func loc(_ key: String) -> String {
-        let lang = currentLanguage
+        let lang = currentLanguage.translationSource
         if let table = translations[lang], let value = table[key] {
             return value
         }
