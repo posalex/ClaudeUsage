@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific data
+*.xcuserstate
+xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Xcode build artifacts
+DerivedData/
+build/
+.build/
+
+# Generated Xcode project (regenerated via xcodegen)
+*.xcodeproj
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# CocoaPods
+Pods/
+
+# Claude Code / Cowork local data
+.claude/
+
+# Local environment
+.env
+.env.local
+
+# Build archives
+*.zip
