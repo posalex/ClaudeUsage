@@ -1,0 +1,36 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate & Build
+        run: |
+          xcodegen generate
+          xcodebuild -project ClaudeUsage.xcodeproj \
+            -scheme ClaudeUsage \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            build
+
+      - name: Package
+        run: |
+          cd build/Build/Products/Release
+          zip -r ClaudeUsage.zip ClaudeUsage.app
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Build/Products/Release/ClaudeUsage.zip
