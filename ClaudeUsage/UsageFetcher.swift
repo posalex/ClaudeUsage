@@ -151,29 +151,45 @@ class UsageFetcher: ObservableObject {
                 lastError = L.errorUnexpectedFormat
                 return
             }
-            isLoggedIn = true
+	            isLoggedIn = true
 
-            let displayData = UsageDisplayData(
-                sessionPercent: normalizeUtilization(rateLimits.fiveHour?.utilization ?? 0),
-                sessionResetISO: rateLimits.fiveHour?.resetsAt ?? "--",
-                weeklyPercent: normalizeUtilization(rateLimits.sevenDay?.utilization ?? 0),
-                weeklyResetISO: rateLimits.sevenDay?.resetsAt ?? "--",
-                weeklySonnetPercent: rateLimits.sevenDaySonnet?.utilization.map { normalizeUtilization($0) },
-                weeklySonnetResetISO: rateLimits.sevenDaySonnet?.resetsAt,
-                lastUpdated: Date(),
-                isLoggedIn: true
-            )
+	            // Normalize all utilization values so future API changes
+	            // (e.g. percentages reported as 0–1) are still clamped sensibly.
+	            let normalized = rateLimits.normalizedUtilizations(using: normalizeUtilization)
+	            let sessionPercent = normalized["five_hour"] ?? 0
+	            let weeklyPercent = normalized["seven_day"] ?? 0
+	            let fableKey = rateLimits.weeklyModelKey(containing: "fable")
+	            // Claude sometimes omits the scoped window's reset timestamp;
+	            // Fable shares the weekly reset in that case.
+	            let fableResetISO = fableKey.flatMap { rateLimits.limits[$0]?.resetsAt }
+	                ?? rateLimits.sevenDay?.resetsAt
+	            // Fable has its own settings and compact label. Keep any other
+	            // per-model limit on the legacy model slot to avoid duplicates.
+	            let highlightedKey = rateLimits.highlightedModelKey(excluding: fableKey)
+	            let highlightedPercent = highlightedKey.flatMap { normalized[$0] }
 
-            updateData(displayData)
+	            let displayData = UsageDisplayData(
+	                sessionPercent: sessionPercent,
+	                sessionResetISO: rateLimits.fiveHour?.resetsAt ?? "--",
+	                weeklyPercent: weeklyPercent,
+	                weeklyResetISO: rateLimits.sevenDay?.resetsAt ?? "--",
+	                weeklySonnetPercent: highlightedPercent,
+	                weeklySonnetResetISO: highlightedKey.flatMap { rateLimits.limits[$0]?.resetsAt },
+	                weeklyFablePercent: fableKey.flatMap { normalized[$0] },
+	                weeklyFableResetISO: fableResetISO,
+	                highlightedModelKey: highlightedKey,
+	                lastUpdated: Date(),
+	                isLoggedIn: true
+	            )
 
-            // Record to history for charts, including session reset time for gap interpolation
-            let sessionResetsAt: Date? = rateLimits.fiveHour?.resetsAt.flatMap { parseISO8601($0) }
-            UsageHistoryStore.shared.record(
-                sessionPercent: displayData.sessionPercent,
-                weeklyPercent: displayData.weeklyPercent,
-                sonnetPercent: displayData.weeklySonnetPercent,
-                sessionResetsAt: sessionResetsAt
-            )
+	            updateData(displayData)
+
+	            // Record to history for charts, including session reset time for gap interpolation
+	            let sessionResetsAt: Date? = rateLimits.fiveHour?.resetsAt.flatMap { parseISO8601($0) }
+	            UsageHistoryStore.shared.record(
+	                metrics: normalized,
+	                sessionResetsAt: sessionResetsAt
+	            )
 
         } catch {
             lastError = error.localizedDescription

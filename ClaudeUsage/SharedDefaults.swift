@@ -2,6 +2,7 @@ import Foundation
 
 enum SharedDefaults {
     static let usageDataKey = "cachedUsageData"
+    static let codexUsageDataKey = "cachedCodexUsageData"
     static let orgUUIDKey = "organizationUUID"
     static let refreshIntervalKey = "refreshIntervalMinutes"
     static let cookieHeaderKey = "claudeCookieHeader"
@@ -19,6 +20,23 @@ enum SharedDefaults {
     static func loadUsageData() -> UsageDisplayData {
         guard let data = suite.data(forKey: usageDataKey),
               let decoded = try? JSONDecoder().decode(UsageDisplayData.self, from: data)
+        else {
+            return .empty
+        }
+        return decoded
+    }
+
+    // MARK: - Codex Usage Data
+
+    static func saveCodexUsageData(_ data: CodexUsageDisplayData) {
+        if let encoded = try? JSONEncoder().encode(data) {
+            suite.set(encoded, forKey: codexUsageDataKey)
+        }
+    }
+
+    static func loadCodexUsageData() -> CodexUsageDisplayData {
+        guard let data = suite.data(forKey: codexUsageDataKey),
+              let decoded = try? JSONDecoder().decode(CodexUsageDisplayData.self, from: data)
         else {
             return .empty
         }
@@ -68,6 +86,10 @@ enum SharedDefaults {
     static let menuBarShowWeeklyResetKey = "menuBarShowWeeklyReset"
     static let menuBarShowSonnetPercentKey = "menuBarShowSonnetPercent"
     static let menuBarShowSonnetResetKey = "menuBarShowSonnetReset"
+    static let menuBarShowFablePercentKey = "menuBarShowFablePercent"
+    static let menuBarShowFableResetKey = "menuBarShowFableReset"
+    static let menuBarShowCodexPercentKey = "menuBarShowCodexPercent"
+    static let menuBarShowCodexResetKey = "menuBarShowCodexReset"
     static let menuBarChartPeriodKey = "menuBarChartPeriod"
     static let languageKey = "appLanguage"
 

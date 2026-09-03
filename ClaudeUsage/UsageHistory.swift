@@ -32,14 +32,21 @@ enum ChartPeriod: String, CaseIterable, Codable {
 // MARK: - History Record
 
 struct UsageHistoryRecord: Identifiable, Sendable {
-    let id: Int64
-    let timestamp: Date
-    let sessionPercent: Double
-    let weeklyPercent: Double
-    let sonnetPercent: Double?
-    let sessionResetsAt: Date?
-    /// true for synthetic records inserted during gap interpolation
-    var isSynthetic: Bool = false
+	let id: Int64
+	let timestamp: Date
+	/// All stored usage metrics for this timestamp keyed by API field name
+	/// (e.g. "five_hour", "seven_day", "seven_day_fable").
+	let metrics: [String: Double]
+	let sessionResetsAt: Date?
+	/// true for synthetic records inserted during gap interpolation
+	var isSynthetic: Bool = false
+
+	/// Convenience accessors for the primary windows used across the UI.
+	var sessionPercent: Double { metrics["five_hour"] ?? 0 }
+	var weeklyPercent: Double { metrics["seven_day"] ?? 0 }
+
+	/// Sorted list of metric keys for convenience when rendering legends.
+	var metricKeys: [String] { metrics.keys.sorted() }
 }
 
 // MARK: - SQLite Usage History Store
@@ -54,6 +61,7 @@ class UsageHistoryStore {
         openDatabase()
         createTable()
         migrateAddResetsAt()
+		createMetricsTable()
     }
 
     // MARK: - Database Setup
@@ -95,6 +103,25 @@ class UsageHistoryStore {
         execute("CREATE INDEX IF NOT EXISTS idx_usage_timestamp ON usage_history(timestamp);")
     }
 
+	/// Additional table that stores arbitrary usage metrics per history row
+	/// so new model/limit keys (e.g. Fable) can be persisted without schema
+	/// changes.
+	private func createMetricsTable() {
+		let sql = """
+		CREATE TABLE IF NOT EXISTS usage_history_metrics (
+		    id INTEGER PRIMARY KEY AUTOINCREMENT,
+		    history_id INTEGER NOT NULL,
+		    metric_key TEXT NOT NULL,
+		    percent REAL NOT NULL,
+		    FOREIGN KEY(history_id) REFERENCES usage_history(id) ON DELETE CASCADE
+		);
+		"""
+		execute(sql)
+		// Indexes for efficient lookup by history id / metric key
+		execute("CREATE INDEX IF NOT EXISTS idx_usage_metrics_history_id ON usage_history_metrics(history_id);")
+		execute("CREATE INDEX IF NOT EXISTS idx_usage_metrics_key ON usage_history_metrics(metric_key);")
+	}
+
     /// Add the session_resets_at column if it doesn't already exist (migration for existing DBs).
     private func migrateAddResetsAt() {
         // SQLite ignores "IF NOT EXISTS" for columns, so check pragma first
@@ -129,35 +156,67 @@ class UsageHistoryStore {
 
     // MARK: - Record Data
 
-    func record(sessionPercent: Double, weeklyPercent: Double, sonnetPercent: Double?, sessionResetsAt: Date? = nil) {
-        queue.async { [weak self] in
-            guard let self, let db = self.db else { return }
-            let sql = "INSERT INTO usage_history (timestamp, session_percent, weekly_percent, sonnet_percent, session_resets_at) VALUES (?, ?, ?, ?, ?)"
-            var stmt: OpaquePointer?
+	/// Persist a snapshot of all usage metrics. The dictionary keys are the
+	/// raw API field names (e.g. "five_hour", "seven_day_fable").
+	func record(metrics: [String: Double], sessionResetsAt: Date? = nil) {
+		queue.async { [weak self] in
+			guard let self, let db = self.db else { return }
+			let insertHistorySQL = "INSERT INTO usage_history (timestamp, session_percent, weekly_percent, sonnet_percent, session_resets_at) VALUES (?, ?, ?, ?, ?)"
+			var stmt: OpaquePointer?
 
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+			guard sqlite3_prepare_v2(db, insertHistorySQL, -1, &stmt, nil) == SQLITE_OK else { return }
 
-            sqlite3_bind_double(stmt, 1, Date().timeIntervalSince1970)
-            sqlite3_bind_double(stmt, 2, sessionPercent)
-            sqlite3_bind_double(stmt, 3, weeklyPercent)
+			let now = Date()
+			let nowTimestamp = now.timeIntervalSince1970
+			let sessionPercent = metrics["five_hour"] ?? 0
+			let weeklyPercent = metrics["seven_day"] ?? 0
+			let sonnetPercent = metrics["seven_day_sonnet"]
 
-            if let sonnet = sonnetPercent {
-                sqlite3_bind_double(stmt, 4, sonnet)
-            } else {
-                sqlite3_bind_null(stmt, 4)
-            }
+			sqlite3_bind_double(stmt, 1, nowTimestamp)
+			sqlite3_bind_double(stmt, 2, sessionPercent)
+			sqlite3_bind_double(stmt, 3, weeklyPercent)
 
-            if let resetsAt = sessionResetsAt {
-                sqlite3_bind_double(stmt, 5, resetsAt.timeIntervalSince1970)
-            } else {
-                sqlite3_bind_null(stmt, 5)
-            }
+			if let sonnet = sonnetPercent {
+				sqlite3_bind_double(stmt, 4, sonnet)
+			} else {
+				sqlite3_bind_null(stmt, 4)
+			}
 
-            sqlite3_step(stmt)
-            sqlite3_finalize(stmt)
-        }
-        compactIfNeeded()
-    }
+			if let resetsAt = sessionResetsAt {
+				sqlite3_bind_double(stmt, 5, resetsAt.timeIntervalSince1970)
+			} else {
+				sqlite3_bind_null(stmt, 5)
+			}
+
+			guard sqlite3_step(stmt) == SQLITE_DONE else {
+				sqlite3_finalize(stmt)
+				return
+			}
+			sqlite3_finalize(stmt)
+
+			let historyId = sqlite3_last_insert_rowid(db)
+
+			// Persist dynamic metrics; store all keys so future UI can render
+			// every category, not just the current favourites.
+			let metricsSQL = "INSERT INTO usage_history_metrics (history_id, metric_key, percent) VALUES (?, ?, ?)"
+			var metricStmt: OpaquePointer?
+			guard sqlite3_prepare_v2(db, metricsSQL, -1, &metricStmt, nil) == SQLITE_OK else { return }
+
+			for (key, value) in metrics {
+				sqlite3_reset(metricStmt)
+				sqlite3_clear_bindings(metricStmt)
+				sqlite3_bind_int64(metricStmt, 1, historyId)
+				key.withCString { cStr in
+					sqlite3_bind_text(metricStmt, 2, cStr, -1, nil)
+					sqlite3_bind_double(metricStmt, 3, value)
+					sqlite3_step(metricStmt)
+				}
+			}
+
+			sqlite3_finalize(metricStmt)
+		}
+		compactIfNeeded()
+	}
 
     // MARK: - Fetch Data
 
@@ -167,48 +226,94 @@ class UsageHistoryStore {
                 DispatchQueue.main.async { completion([]) }
                 return
             }
-            let sql = """
-            SELECT id, timestamp, session_percent, weekly_percent, sonnet_percent, session_resets_at
-            FROM usage_history
-            WHERE timestamp >= ?
-            ORDER BY timestamp ASC
-            """
-            var stmt: OpaquePointer?
-            var records: [UsageHistoryRecord] = []
+			let sql = """
+			SELECT id, timestamp, session_percent, weekly_percent, sonnet_percent, session_resets_at
+			FROM usage_history
+			WHERE timestamp >= ?
+			ORDER BY timestamp ASC
+			"""
+			var stmt: OpaquePointer?
+			var rawRows: [(id: Int64, timestamp: Date, session: Double, weekly: Double, sonnet: Double?, resetsAt: Date?)] = []
 
-            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
-                DispatchQueue.main.async { completion([]) }
-                return
-            }
+			guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+				DispatchQueue.main.async { completion([]) }
+				return
+			}
 
-            sqlite3_bind_double(stmt, 1, startDate.timeIntervalSince1970)
+			sqlite3_bind_double(stmt, 1, startDate.timeIntervalSince1970)
 
-            while sqlite3_step(stmt) == SQLITE_ROW {
-                let id = sqlite3_column_int64(stmt, 0)
-                let timestamp = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 1))
-                let session = sqlite3_column_double(stmt, 2)
-                let weekly = sqlite3_column_double(stmt, 3)
-                let sonnet: Double? = sqlite3_column_type(stmt, 4) == SQLITE_NULL
-                    ? nil
-                    : sqlite3_column_double(stmt, 4)
-                let resetsAt: Date? = sqlite3_column_type(stmt, 5) == SQLITE_NULL
-                    ? nil
-                    : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5))
+			while sqlite3_step(stmt) == SQLITE_ROW {
+				let id = sqlite3_column_int64(stmt, 0)
+				let timestamp = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 1))
+				let session = sqlite3_column_double(stmt, 2)
+				let weekly = sqlite3_column_double(stmt, 3)
+				let sonnet: Double? = sqlite3_column_type(stmt, 4) == SQLITE_NULL
+					? nil
+					: sqlite3_column_double(stmt, 4)
+				let resetsAt: Date? = sqlite3_column_type(stmt, 5) == SQLITE_NULL
+					? nil
+					: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5))
 
-                records.append(UsageHistoryRecord(
-                    id: id,
-                    timestamp: timestamp,
-                    sessionPercent: session,
-                    weeklyPercent: weekly,
-                    sonnetPercent: sonnet,
-                    sessionResetsAt: resetsAt
-                ))
-            }
+				rawRows.append((id: id, timestamp: timestamp, session: session, weekly: weekly, sonnet: sonnet, resetsAt: resetsAt))
+			}
 
-            sqlite3_finalize(stmt)
+			sqlite3_finalize(stmt)
 
-            let interpolated = Self.interpolateGaps(in: records)
-            DispatchQueue.main.async { completion(interpolated) }
+			// Fetch dynamic metrics for the same time range and group them by history id.
+			let metricsSql = """
+			SELECT m.history_id, m.metric_key, m.percent
+			FROM usage_history_metrics m
+			JOIN usage_history h ON h.id = m.history_id
+			WHERE h.timestamp >= ?
+			ORDER BY m.history_id ASC
+			"""
+			var metricsStmt: OpaquePointer?
+			var metricsByHistory: [Int64: [String: Double]] = [:]
+
+			if sqlite3_prepare_v2(db, metricsSql, -1, &metricsStmt, nil) == SQLITE_OK {
+				sqlite3_bind_double(metricsStmt, 1, startDate.timeIntervalSince1970)
+				while sqlite3_step(metricsStmt) == SQLITE_ROW {
+					let historyId = sqlite3_column_int64(metricsStmt, 0)
+					guard let keyCStr = sqlite3_column_text(metricsStmt, 1) else { continue }
+					let key = String(cString: keyCStr)
+					let percent = sqlite3_column_double(metricsStmt, 2)
+
+					var dict = metricsByHistory[historyId] ?? [:]
+					dict[key] = percent
+					metricsByHistory[historyId] = dict
+				}
+			}
+			sqlite3_finalize(metricsStmt)
+
+			// Build final records, falling back to the legacy columns when there
+			// is no entry in the dynamic metrics table (old installations).
+			var records: [UsageHistoryRecord] = []
+			for row in rawRows {
+				let storedMetrics = metricsByHistory[row.id]
+				var metrics = storedMetrics ?? [:]
+
+				// Rows from the pre-dynamic-metrics schema only have the legacy
+				// Claude columns. New rows can contain a different provider (Codex),
+				// so do not invent zero-valued Claude metrics for those rows.
+				if storedMetrics == nil {
+					metrics["five_hour"] = row.session
+					metrics["seven_day"] = row.weekly
+					if let sonnet = row.sonnet {
+						metrics["seven_day_sonnet"] = sonnet
+					}
+				}
+
+				records.append(UsageHistoryRecord(
+					id: row.id,
+					timestamp: row.timestamp,
+					metrics: metrics,
+					sessionResetsAt: row.resetsAt,
+					isSynthetic: false
+				))
+			}
+
+			let interpolated = Self.interpolateGaps(in: records)
+			DispatchQueue.main.async { completion(interpolated) }
         }
     }
 
@@ -235,31 +340,37 @@ class UsageHistoryStore {
                 let next = records[i + 1]
                 let gap = next.timestamp.timeIntervalSince(current.timestamp)
 
-                if gap > gapThreshold, let resetsAt = current.sessionResetsAt {
+				if gap > gapThreshold,
+				   current.metrics["five_hour"] != nil,
+				   next.metrics["five_hour"] != nil,
+				   let resetsAt = current.sessionResetsAt {
                     // Does the reset time fall within this gap?
                     if resetsAt > current.timestamp && resetsAt < next.timestamp {
                         // Calculate how far into the gap the reset occurs (0..1)
                         let fraction = resetsAt.timeIntervalSince(current.timestamp) / gap
 
-                        // Linearly interpolate weekly percent across the gap
-                        let weeklyAtReset = current.weeklyPercent + (next.weeklyPercent - current.weeklyPercent) * fraction
-                        let sonnetAtReset: Double? = {
-                            if let cs = current.sonnetPercent, let ns = next.sonnetPercent {
-                                return cs + (ns - cs) * fraction
-                            }
-                            return nil
-                        }()
+						// Linearly interpolate all metrics across the gap. The
+						// session window (five_hour) is special: it resets to 0 at
+						// the reset point, while weekly/model windows continue
+						// smoothly.
+						var interpolatedMetrics: [String: Double] = [:]
+						interpolatedMetrics["five_hour"] = 0
+						let allKeys = Set(current.metrics.keys).union(next.metrics.keys)
+						for key in allKeys {
+							if key == "five_hour" { continue }
+							guard let cVal = current.metrics[key], let nVal = next.metrics[key] else { continue }
+							let valueAtReset = cVal + (nVal - cVal) * fraction
+							interpolatedMetrics[key] = valueAtReset
+						}
 
-                        // Insert a synthetic 0% session record at the reset time
-                        result.append(UsageHistoryRecord(
-                            id: -1,
-                            timestamp: resetsAt,
-                            sessionPercent: 0,
-                            weeklyPercent: weeklyAtReset,
-                            sonnetPercent: sonnetAtReset,
-                            sessionResetsAt: nil,
-                            isSynthetic: true
-                        ))
+						// Insert a synthetic record at the reset time
+						result.append(UsageHistoryRecord(
+							id: -1,
+							timestamp: resetsAt,
+							metrics: interpolatedMetrics,
+							sessionResetsAt: nil,
+							isSynthetic: true
+						))
                     }
                 }
             }

@@ -3,6 +3,7 @@ import Charts
 
 struct UsageChartView: View {
     @ObservedObject var fetcher: UsageFetcher
+    @ObservedObject var codexFetcher: CodexUsageFetcher
 
     @State private var selectedPeriod: ChartPeriod = {
         if let raw = SharedDefaults.loadChartPeriod(),
@@ -38,6 +39,7 @@ struct UsageChartView: View {
         .onAppear { loadData() }
         .onChange(of: selectedPeriod) { _, _ in loadData() }
         .onChange(of: fetcher.usageData.lastUpdated) { _, _ in loadData() }
+        .onChange(of: codexFetcher.usageData.lastUpdated) { _, _ in loadData() }
     }
 
     // MARK: - Period Picker

@@ -3,11 +3,12 @@ import ServiceManagement
 
 struct MenuBarView: View {
     @ObservedObject var fetcher: UsageFetcher
+    @ObservedObject var codexFetcher: CodexUsageFetcher
     var openMainWindow: () -> Void
 
     /// nil = "do not show", otherwise the selected chart period
     @AppStorage(SharedDefaults.menuBarChartPeriodKey)
-    private var menuBarChartPeriodRaw: String = ""
+    private var menuBarChartPeriodRaw: String = ChartPeriod.day.rawValue
 
     // Observe language changes so the view re-renders
     @AppStorage(SharedDefaults.languageKey)
@@ -23,13 +24,26 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 0) {
             if fetcher.isLoggedIn {
                 usageSection
-            } else {
+            }
+
+            if codexFetcher.isAvailable {
+                if fetcher.isLoggedIn {
+                    sectionDivider
+                }
+                codexUsageSection
+            }
+
+            if !fetcher.isLoggedIn && !codexFetcher.isAvailable {
                 notLoggedInSection
             }
 
-            if let period = menuBarChartPeriod, fetcher.isLoggedIn {
+            if let period = menuBarChartPeriod, fetcher.isLoggedIn || codexFetcher.isAvailable {
                 sectionDivider
-                MenuBarChartView(period: period, lastUpdated: fetcher.usageData.lastUpdated)
+                MenuBarChartView(
+                    period: period,
+                    claudeLastUpdated: fetcher.usageData.lastUpdated,
+                    codexLastUpdated: codexFetcher.usageData.lastUpdated
+                )
                     .padding(.horizontal, 12)
             }
 
@@ -44,9 +58,13 @@ struct MenuBarView: View {
                 }
             }
             menuButton(L.refreshNow, icon: "arrow.clockwise", shortcut: "R") {
-                Task { await fetcher.fetchUsage() }
+                Task {
+                    async let claudeRefresh: Void = fetcher.fetchUsage()
+                    async let codexRefresh: Void = codexFetcher.fetchUsage()
+                    _ = await (claudeRefresh, codexRefresh)
+                }
             }
-            .opacity(fetcher.isFetching ? 0.5 : 1)
+            .opacity(fetcher.isFetching || codexFetcher.isFetching ? 0.5 : 1)
 
             sectionDivider
 
@@ -118,9 +136,17 @@ struct MenuBarView: View {
         .contentShape(Rectangle())
     }
 
-    // MARK: - Usage Section
+	    // MARK: - Usage Section
 
-    private var usageSection: some View {
+	    private var highlightedModelColor: Color {
+	        guard let key = fetcher.usageData.highlightedModelKey?.lowercased() else { return .purple }
+	        if key.contains("fable") { return .green }
+	        if key.contains("sonnet") { return .purple }
+	        if key.contains("opus") { return .pink }
+	        return .purple
+	    }
+
+	    private var usageSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             usageBlock(
                 title: L.sessionTitle,
@@ -136,21 +162,57 @@ struct MenuBarView: View {
                 color: .blue
             )
 
-            if let sonnet = fetcher.usageData.weeklySonnetPercent {
+	            if let fable = fetcher.usageData.weeklyFablePercent {
+	                usageBlock(
+	                    title: L.fableTitle,
+	                    reset: fetcher.usageData.fableResetCompact ?? "--",
+	                    percent: fable,
+	                    color: .green
+	                )
+	            }
+
+	            if let sonnet = fetcher.usageData.weeklySonnetPercent {
                 usageBlock(
-                    title: L.sonnetTitle,
+	                    title: fetcher.usageData.highlightedModelTitle ?? L.sonnetTitle,
                     reset: fetcher.usageData.sonnetResetCompact ?? "--",
                     percent: sonnet,
-                    color: .purple
+	                    color: highlightedModelColor
                 )
             }
 
-            if fetcher.usageData.isLoggedIn {
-                Text("\(L.updated): \(fetcher.usageData.lastUpdated.formatted(.dateTime.hour().minute()))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 12)
+	            if fetcher.usageData.isLoggedIn {
+	                Text("\(L.updated): \(fetcher.usageData.lastUpdated.formatted(.dateTime.hour().minute()))")
+	                    .font(.system(size: 10))
+	                    .foregroundStyle(.tertiary)
+	                    .padding(.horizontal, 12)
+	            }
+	        }
+	    }
+
+    private var codexUsageSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let primary = codexFetcher.usageData.primary {
+                usageBlock(
+                    title: primary.title,
+                    reset: primary.resetCompact,
+                    percent: primary.usedPercent,
+                    color: .indigo
+                )
             }
+
+            if let secondary = codexFetcher.usageData.secondary {
+                usageBlock(
+                    title: secondary.title,
+                    reset: secondary.resetCompact,
+                    percent: secondary.usedPercent,
+                    color: .indigo
+                )
+            }
+
+            Text("\(L.codexUsage) · \(L.updated): \(codexFetcher.usageData.lastUpdated.formatted(.dateTime.hour().minute()))")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 12)
         }
     }
 

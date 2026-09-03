@@ -49,6 +49,7 @@ enum L {
     static var sessionTitle: String { loc("Session (5h)") }
     static var weeklyTitle: String { loc("Weekly (7d)") }
     static var sonnetTitle: String { loc("Sonnet") }
+    static var fableTitle: String { loc("Fable (7d)") }
     static var resetIn: String { loc("reset in") }
     static var updated: String { loc("Updated") }
 
@@ -78,6 +79,10 @@ enum L {
     static var weeklyResetTime: String { loc("Weekly reset time") }
     static var sonnetPercent: String { loc("Sonnet %") }
     static var sonnetResetTime: String { loc("Sonnet reset time") }
+    static var fablePercent: String { loc("Fable %") }
+    static var fableResetTime: String { loc("Fable reset time") }
+    static var codexPercent: String { loc("Codex %") }
+    static var codexResetTime: String { loc("Codex reset time") }
 
     // Chart
     static var off: String { loc("Off") }
@@ -131,6 +136,13 @@ enum L {
     static var restartNow: String { loc("Restart Now") }
     static var org: String { loc("Org:") }
 
+    // Codex
+    static var codexUsage: String { loc("Codex Usage") }
+    static var codexConnected: String { loc("Connected through Codex CLI") }
+    static var codexNotInstalled: String { loc("Codex CLI is not installed") }
+    static var codexUsageUnavailable: String { loc("Codex usage is unavailable") }
+    static var codexCliHint: String { loc("Install Codex CLI and sign in with ChatGPT to show its usage here.") }
+
     // Reset time (parameterized)
     static func resetsInDays(_ n: Int) -> String { loc("Resets in %d").replacingOccurrences(of: "%d", with: "\(n)") + loc("d_suffix") }
     static func resetsInHours(_ n: Int) -> String { loc("Resets in %d").replacingOccurrences(of: "%d", with: "\(n)") + loc("h_suffix") }
@@ -170,6 +182,11 @@ enum L {
 extension L {
     private static let translations: [AppLanguage: [String: String]] = [
         .english: [
+            "Codex Usage": "Codex Usage",
+            "Connected through Codex CLI": "Connected through Codex CLI",
+            "Codex CLI is not installed": "Codex CLI is not installed",
+            "Codex usage is unavailable": "Codex usage is unavailable",
+            "Install Codex CLI and sign in with ChatGPT to show its usage here.": "Install Codex CLI and sign in with ChatGPT to show its usage here.",
             // Suffixes for reset durations
             "d_suffix": "d",
             "h_suffix": "h",
@@ -182,6 +199,7 @@ extension L {
             "Session (5h)": "Sitzung (5h)",
             "Weekly (7d)": "Wöchentlich (7d)",
             "Sonnet": "Sonnet",
+            "Fable (7d)": "Fable (7d)",
             "reset in": "Reset in",
             "Updated": "Aktualisiert",
             "Settings": "Einstellungen",
@@ -203,6 +221,10 @@ extension L {
             "Weekly reset time": "Wöchentlich Reset-Zeit",
             "Sonnet %": "Sonnet %",
             "Sonnet reset time": "Sonnet Reset-Zeit",
+            "Fable %": "Fable %",
+            "Fable reset time": "Fable Reset-Zeit",
+            "Codex %": "Codex %",
+            "Codex reset time": "Codex Reset-Zeit",
             "Off": "Aus",
             "Usage Over Time": "Nutzung im Zeitverlauf",
             "No usage data yet": "Noch keine Nutzungsdaten",
@@ -244,6 +266,11 @@ extension L {
             "Restart to apply language change": "Neustart für Sprachwechsel erforderlich",
             "Restart Now": "Jetzt neu starten",
             "Org:": "Org:",
+            "Codex Usage": "Codex Nutzung",
+            "Connected through Codex CLI": "Über Codex CLI verbunden",
+            "Codex CLI is not installed": "Codex CLI ist nicht installiert",
+            "Codex usage is unavailable": "Codex-Nutzung ist nicht verfügbar",
+            "Install Codex CLI and sign in with ChatGPT to show its usage here.": "Installiere die Codex CLI und melde dich mit ChatGPT an, um die Nutzung hier anzuzeigen.",
             // Reset time
             "d_suffix": "T",
             "h_suffix": "h",
@@ -280,6 +307,8 @@ extension L {
             "Weekly reset time": "Wekelijks resettijd",
             "Sonnet %": "Sonnet %",
             "Sonnet reset time": "Sonnet resettijd",
+            "Codex %": "Codex %",
+            "Codex reset time": "Codex resettijd",
             "Off": "Uit",
             "Usage Over Time": "Gebruik in de tijd",
             "No usage data yet": "Nog geen gebruiksgegevens",
@@ -320,6 +349,11 @@ extension L {
             "Restart to apply language change": "Herstart om taalwijziging toe te passen",
             "Restart Now": "Nu herstarten",
             "Org:": "Org:",
+            "Codex Usage": "Codex Gebruik",
+            "Connected through Codex CLI": "Verbonden via Codex CLI",
+            "Codex CLI is not installed": "Codex CLI is niet geïnstalleerd",
+            "Codex usage is unavailable": "Codex-gebruik is niet beschikbaar",
+            "Install Codex CLI and sign in with ChatGPT to show its usage here.": "Installeer Codex CLI en log in met ChatGPT om het gebruik hier te tonen.",
             // Reset time
             "d_suffix": "d",
             "h_suffix": "u",
@@ -356,6 +390,8 @@ extension L {
             "Weekly reset time": "Недељно време ресета",
             "Sonnet %": "Sonnet %",
             "Sonnet reset time": "Sonnet време ресета",
+            "Codex %": "Codex %",
+            "Codex reset time": "Codex време ресета",
             "Off": "Искључено",
             "Usage Over Time": "Коришћење током времена",
             "No usage data yet": "Још нема података",
@@ -396,6 +432,11 @@ extension L {
             "Restart to apply language change": "Поново покрените за промену језика",
             "Restart Now": "Поново покрени",
             "Org:": "Орг:",
+            "Codex Usage": "Codex Коришћење",
+            "Connected through Codex CLI": "Повезано преко Codex CLI",
+            "Codex CLI is not installed": "Codex CLI није инсталиран",
+            "Codex usage is unavailable": "Codex коришћење није доступно",
+            "Install Codex CLI and sign in with ChatGPT to show its usage here.": "Инсталирајте Codex CLI и пријавите се преко ChatGPT-а да бисте овде видели коришћење.",
             // Reset time
             "d_suffix": "д",
             "h_suffix": "ч",

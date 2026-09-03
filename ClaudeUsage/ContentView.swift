@@ -4,6 +4,7 @@ import ServiceManagement
 
 struct ContentView: View {
     @ObservedObject var fetcher: UsageFetcher
+    @ObservedObject var codexFetcher: CodexUsageFetcher
     @State private var showLoginSheet = false
 
     // Observe language changes so the view re-renders when language switches
@@ -27,10 +28,18 @@ struct ContentView: View {
     private var showSonnetPercent: Bool = false
     @AppStorage(SharedDefaults.menuBarShowSonnetResetKey)
     private var showSonnetReset: Bool = false
+    @AppStorage(SharedDefaults.menuBarShowFablePercentKey)
+    private var showFablePercent: Bool = false
+    @AppStorage(SharedDefaults.menuBarShowFableResetKey)
+    private var showFableReset: Bool = false
+    @AppStorage(SharedDefaults.menuBarShowCodexPercentKey)
+    private var showCodexPercent: Bool = true
+    @AppStorage(SharedDefaults.menuBarShowCodexResetKey)
+    private var showCodexReset: Bool = true
 
     // Menu bar chart period
     @AppStorage(SharedDefaults.menuBarChartPeriodKey)
-    private var menuBarChartPeriodRaw: String = ""
+    private var menuBarChartPeriodRaw: String = ChartPeriod.day.rawValue
 
     // Refresh interval
     @AppStorage(SharedDefaults.refreshIntervalKey)
@@ -47,7 +56,7 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     settingsSection
-                    if fetcher.isLoggedIn || fetcher.lastError != nil {
+                    if fetcher.isLoggedIn || codexFetcher.isAvailable || fetcher.lastError != nil || codexFetcher.lastError != nil {
                         usageDashboard
                     } else {
                         welcomeState
@@ -94,22 +103,30 @@ struct ContentView: View {
 
             Spacer()
 
-            if fetcher.isLoggedIn {
+            if fetcher.isLoggedIn || codexFetcher.isAvailable {
                 Button(action: {
-                    Task { await fetcher.fetchUsage() }
+                    refreshAllUsage()
                 }) {
                     Image(systemName: "arrow.clockwise")
-                        .rotationEffect(.degrees(fetcher.isFetching ? 360 : 0))
-                        .animation(fetcher.isFetching ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: fetcher.isFetching)
+                        .rotationEffect(.degrees((fetcher.isFetching || codexFetcher.isFetching) ? 360 : 0))
+                        .animation((fetcher.isFetching || codexFetcher.isFetching) ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: fetcher.isFetching || codexFetcher.isFetching)
                 }
                 .buttonStyle(.borderless)
-                .disabled(fetcher.isFetching)
+                .disabled(fetcher.isFetching || codexFetcher.isFetching)
 
-                Button(L.logout) {
-                    fetcher.logout()
+                if fetcher.isLoggedIn {
+                    Button(L.logout) {
+                        fetcher.logout()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                } else {
+                    Button(L.logIn) {
+                        showLoginSheet = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             } else {
                 Button(L.logIn) {
                     showLoginSheet = true
@@ -179,6 +196,36 @@ struct ContentView: View {
                     displayToggle(L.weeklyResetTime, isOn: $showWeeklyReset)
                     displayToggle(L.sonnetPercent, isOn: $showSonnetPercent)
                     displayToggle(L.sonnetResetTime, isOn: $showSonnetReset)
+                    displayToggle(L.fablePercent, isOn: $showFablePercent)
+                    displayToggle(L.fableResetTime, isOn: $showFableReset)
+                    displayToggle(L.codexPercent, isOn: $showCodexPercent)
+                    displayToggle(L.codexResetTime, isOn: $showCodexReset)
+                }
+            }
+
+            settingRow(L.codexUsage) {
+                if codexFetcher.isAvailable {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 6, height: 6)
+                        Text(L.codexConnected)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(codexFetcher.usageData.lastUpdated.formatted(.dateTime.hour().minute()))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(codexFetcher.lastError ?? L.codexUsageUnavailable)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                        Text(L.codexCliHint)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             }
 
@@ -260,6 +307,7 @@ struct ContentView: View {
                     refreshInterval = minutes
                     SharedDefaults.saveRefreshInterval(minutes)
                     fetcher.restartAutoRefresh()
+                    codexFetcher.restartAutoRefresh()
                 }
             }
         }
@@ -322,9 +370,25 @@ struct ContentView: View {
         .padding(.vertical, 40)
     }
 
-    // MARK: - Usage Dashboard
+    private func refreshAllUsage() {
+        Task {
+            async let claudeRefresh: Void = fetcher.fetchUsage()
+            async let codexRefresh: Void = codexFetcher.fetchUsage()
+            _ = await (claudeRefresh, codexRefresh)
+        }
+    }
 
-    private var usageDashboard: some View {
+	    // MARK: - Usage Dashboard
+
+	    private var highlightedModelColor: Color {
+	        guard let key = fetcher.usageData.highlightedModelKey?.lowercased() else { return .purple }
+	        if key.contains("fable") { return .green }
+	        if key.contains("sonnet") { return .purple }
+	        if key.contains("opus") { return .pink }
+	        return .purple
+	    }
+
+	    private var usageDashboard: some View {
         VStack(spacing: 16) {
             // Error banner
             if let error = fetcher.lastError {
@@ -347,34 +411,84 @@ struct ContentView: View {
                 .cornerRadius(8)
             }
 
-            // Usage bars
-            VStack(spacing: 16) {
-                UsageBarView(
-                    title: L.sessionTitle,
-                    percent: fetcher.usageData.sessionPercent,
-                    resetLabel: fetcher.usageData.sessionResetLabel,
-                    color: .blue
-                )
-
-                UsageBarView(
-                    title: L.weeklyTitle,
-                    percent: fetcher.usageData.weeklyPercent,
-                    resetLabel: fetcher.usageData.weeklyResetLabel,
-                    color: .blue
-                )
-
-                if let sonnetPercent = fetcher.usageData.weeklySonnetPercent {
-                    UsageBarView(
-                        title: L.sonnetTitle,
-                        percent: sonnetPercent,
-                        resetLabel: fetcher.usageData.weeklySonnetResetLabel ?? "--",
-                        color: .purple
-                    )
+            if let error = codexFetcher.lastError {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("\(L.codexUsage): \(error)")
+                        .font(.caption)
+                    Spacer()
                 }
+                .padding(12)
+                .background(.orange.opacity(0.1))
+                .cornerRadius(8)
             }
-            .padding(20)
-            .background(Color(nsColor: .controlBackgroundColor))
-            .cornerRadius(12)
+
+            // Claude usage bars
+	            if fetcher.isLoggedIn {
+	                VStack(spacing: 16) {
+	                UsageBarView(
+	                    title: L.sessionTitle,
+	                    percent: fetcher.usageData.sessionPercent,
+	                    resetLabel: fetcher.usageData.sessionResetLabel,
+	                    color: .blue
+	                )
+
+	                UsageBarView(
+	                    title: L.weeklyTitle,
+	                    percent: fetcher.usageData.weeklyPercent,
+	                    resetLabel: fetcher.usageData.weeklyResetLabel,
+	                    color: .blue
+	                )
+
+	                if let fablePercent = fetcher.usageData.weeklyFablePercent {
+	                    UsageBarView(
+	                        title: L.fableTitle,
+	                        percent: fablePercent,
+	                        resetLabel: fetcher.usageData.weeklyFableResetLabel ?? "--",
+	                        color: .green
+	                    )
+	                }
+
+	                if let sonnetPercent = fetcher.usageData.weeklySonnetPercent {
+	                    UsageBarView(
+	                        title: fetcher.usageData.highlightedModelTitle ?? L.sonnetTitle,
+	                        percent: sonnetPercent,
+	                        resetLabel: fetcher.usageData.weeklySonnetResetLabel ?? "--",
+	                        color: highlightedModelColor
+	                    )
+	                }
+	                }
+	                .padding(20)
+	                .background(Color(nsColor: .controlBackgroundColor))
+	                .cornerRadius(12)
+	            }
+
+            // Codex rate-limit windows, supplied by the locally installed CLI.
+            if codexFetcher.isAvailable {
+                VStack(spacing: 16) {
+                    if let primary = codexFetcher.usageData.primary {
+                        UsageBarView(
+                            title: primary.title,
+                            percent: primary.usedPercent,
+                            resetLabel: primary.resetLabel,
+                            color: .indigo
+                        )
+                    }
+
+                    if let secondary = codexFetcher.usageData.secondary {
+                        UsageBarView(
+                            title: secondary.title,
+                            percent: secondary.usedPercent,
+                            resetLabel: secondary.resetLabel,
+                            color: .indigo
+                        )
+                    }
+                }
+                .padding(20)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            }
 
             // Last updated
             if fetcher.usageData.isLoggedIn {
@@ -383,8 +497,16 @@ struct ContentView: View {
                     .foregroundStyle(.tertiary)
             }
 
+            if codexFetcher.isAvailable {
+                Text("\(L.codexUsage) · \(L.updated): \(codexFetcher.usageData.lastUpdated.formatted(.dateTime.hour().minute().second()))")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
             // Usage history chart
-            UsageChartView(fetcher: fetcher)
+            if fetcher.isLoggedIn || codexFetcher.isAvailable {
+                UsageChartView(fetcher: fetcher, codexFetcher: codexFetcher)
+            }
         }
     }
 }

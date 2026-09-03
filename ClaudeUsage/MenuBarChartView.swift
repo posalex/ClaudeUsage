@@ -4,7 +4,8 @@ import Charts
 /// A compact usage chart designed for the menu bar dropdown.
 struct MenuBarChartView: View {
     let period: ChartPeriod
-    let lastUpdated: Date
+    let claudeLastUpdated: Date
+    let codexLastUpdated: Date
     @State private var records: [UsageHistoryRecord] = []
 
     // Observe language changes so legend labels update
@@ -20,7 +21,8 @@ struct MenuBarChartView: View {
         }
         .onAppear { loadData() }
         .onChange(of: period) { _, _ in loadData() }
-        .onChange(of: lastUpdated) { _, _ in loadData() }
+        .onChange(of: claudeLastUpdated) { _, _ in loadData() }
+        .onChange(of: codexLastUpdated) { _, _ in loadData() }
     }
 
     // MARK: - Chart
@@ -28,29 +30,27 @@ struct MenuBarChartView: View {
     private var chart: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Compact legend
-            HStack(spacing: 10) {
-                legendDot(color: .blue, label: L.sessionTitle)
-                legendDot(color: .orange, label: L.weeklyTitle)
-                if records.contains(where: { $0.sonnetPercent != nil }) {
-                    legendDot(color: .purple, label: L.sonnetTitle)
-                }
-            }
+	            HStack(spacing: 10) {
+	                ForEach(seriesDescriptors, id: \.key) { series in
+	                    legendDot(color: series.color, label: series.name)
+	                }
+	            }
             .padding(.horizontal, 4)
 
-            UsageChartContent(records: records, lineWidth: 1.5, period: period)
-                .chartYAxis {
-                    AxisMarks(values: [0, 50, 100]) { value in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3]))
-                            .foregroundStyle(Color.gray.opacity(0.25))
-                        AxisValueLabel {
-                            if let intVal = value.as(Int.self) {
-                                Text("\(intVal)%")
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                }
+	            UsageChartContent(records: records, lineWidth: 1.5, period: period)
+	                .chartYAxis {
+	                    AxisMarks(values: [0, 50, 100]) { value in
+	                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3]))
+	                            .foregroundStyle(Color.gray.opacity(0.25))
+	                        AxisValueLabel {
+	                            if let intVal = value.as(Int.self) {
+	                                Text("\(intVal)%")
+	                                    .font(.system(size: 9))
+	                                    .foregroundColor(.secondary)
+	                            }
+	                        }
+	                    }
+	                }
                 .chartXAxis {
                     AxisMarks { _ in
                         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3]))
@@ -62,9 +62,14 @@ struct MenuBarChartView: View {
                 .chartLegend(.hidden)
                 .frame(height: 120)
         }
-    }
+	    }
 
-    private func legendDot(color: Color, label: String) -> some View {
+	    /// Series descriptors derived from the loaded history records.
+	    private var seriesDescriptors: [UsageMetricSeriesDescriptor] {
+	        UsageChartContent.buildSeriesDescriptors(from: records)
+	    }
+
+	    private func legendDot(color: Color, label: String) -> some View {
         HStack(spacing: 3) {
             Circle().fill(color).frame(width: 6, height: 6)
             Text(label)

@@ -8,7 +8,7 @@ struct ClaudeUsageApp: App {
 
     var body: some Scene {
         Window(L.claudeUsage, id: "main") {
-            ContentView(fetcher: appDelegate.fetcher)
+            ContentView(fetcher: appDelegate.fetcher, codexFetcher: appDelegate.codexFetcher)
                 .onDisappear {
                     NSApp.setActivationPolicy(.accessory)
                 }
@@ -24,13 +24,13 @@ struct ClaudeUsageApp: App {
         .defaultLaunchBehavior(.suppressed)
 
         MenuBarExtra {
-            MenuBarView(fetcher: appDelegate.fetcher, openMainWindow: {
+            MenuBarView(fetcher: appDelegate.fetcher, codexFetcher: appDelegate.codexFetcher, openMainWindow: {
                 NSApp.setActivationPolicy(.regular)
                 openWindow(id: "main")
                 NSApp.activate(ignoringOtherApps: true)
             })
         } label: {
-            MenuBarLabel(fetcher: appDelegate.fetcher)
+            MenuBarLabel(fetcher: appDelegate.fetcher, codexFetcher: appDelegate.codexFetcher)
         }
         .menuBarExtraStyle(.window)
     }
@@ -40,6 +40,7 @@ struct ClaudeUsageApp: App {
 /// so the menu bar label updates when either changes.
 struct MenuBarLabel: View {
     @ObservedObject var fetcher: UsageFetcher
+    @ObservedObject var codexFetcher: CodexUsageFetcher
 
     @AppStorage(SharedDefaults.languageKey) private var _lang = AppLanguage.english.rawValue
     @AppStorage(SharedDefaults.menuBarShowSessionPercentKey) private var _sp = true
@@ -48,10 +49,18 @@ struct MenuBarLabel: View {
     @AppStorage(SharedDefaults.menuBarShowWeeklyResetKey) private var _wr = false
     @AppStorage(SharedDefaults.menuBarShowSonnetPercentKey) private var _snp = false
     @AppStorage(SharedDefaults.menuBarShowSonnetResetKey) private var _snr = false
+    @AppStorage(SharedDefaults.menuBarShowFablePercentKey) private var _fp = false
+    @AppStorage(SharedDefaults.menuBarShowFableResetKey) private var _fr = false
+    @AppStorage(SharedDefaults.menuBarShowCodexPercentKey) private var _cp = true
+    @AppStorage(SharedDefaults.menuBarShowCodexResetKey) private var _cr = true
 
     var body: some View {
-        let _ = (_lang, _sp, _sr, _wp, _wr, _snp, _snr)
-        let label = fetcher.usageData.menuBarLabel()
+        let _ = (_lang, _sp, _sr, _wp, _wr, _snp, _snr, _fp, _fr, _cp, _cr)
+        let labels = [
+            fetcher.isLoggedIn ? fetcher.usageData.menuBarLabel() : nil,
+            codexFetcher.usageData.menuBarLabel()
+        ].compactMap { $0 }
+        let label = labels.isEmpty ? "—" : labels.joined(separator: "  ·  ")
         HStack(spacing: 3) {
             Image(systemName: "sparkle")
                 .imageScale(.small)
@@ -64,12 +73,16 @@ struct MenuBarLabel: View {
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let fetcher = UsageFetcher()
+    let codexFetcher = CodexUsageFetcher()
     @Published var shouldOpenWindow = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if fetcher.isLoggedIn {
+        let hasCachedUsage = fetcher.isLoggedIn || codexFetcher.isAvailable
+        fetcher.startAutoRefresh()
+        codexFetcher.startAutoRefresh()
+
+        if hasCachedUsage {
             NSApp.setActivationPolicy(.accessory)
-            fetcher.startAutoRefresh()
         } else {
             NSApp.setActivationPolicy(.regular)
             // Signal the SwiftUI view to open the window.

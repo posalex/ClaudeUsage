@@ -1,6 +1,6 @@
 # ClaudeUsage — macOS Menu Bar Utility
 
-A macOS menu bar app that shows your claude.ai subscription usage and rate limits at a glance.
+A macOS menu bar app that shows your Claude and Codex subscription usage and rate limits at a glance.
 
 ## Screenshots
 
@@ -10,6 +10,7 @@ A macOS menu bar app that shows your claude.ai subscription usage and rate limit
 ## Features
 
 - **Menu bar icon** with configurable label (percentage, reset time, or both)
+- **Codex usage** from the locally installed and signed-in Codex CLI — no Codex token is copied into the app
 - **Inline usage chart** in the menu dropdown (selectable time period)
 - **Usage history** stored locally in SQLite (90-day retention)
 - **Two login methods**: built-in WebView or browser cookie import (for SSO users)
@@ -49,6 +50,8 @@ On first launch the app opens a window to log in. Choose either:
 
 Once authenticated, the window closes and the app runs as a menu-bar-only utility (sparkle icon). Click the icon to see usage bars, toggle display options, and optionally show a usage chart.
 
+If [Codex CLI](https://developers.openai.com/codex/cli/) is installed and signed in with ChatGPT, its current rate-limit windows are fetched alongside Claude's usage. Codex percentage and reset-time text can be toggled independently in Settings. The app asks the local Codex CLI for the usage snapshot; it does not read or retain Codex credentials.
+
 To reopen the main window, click **Open Claude Usage** in the menu dropdown (or press ⌘O).
 
 ## Architecture
@@ -86,7 +89,7 @@ To reopen the main window, click **Open Claude Usage** in the menu dropdown (or 
 ## Configuration
 
 - **Refresh interval**: 1–30 minutes (Settings in main window)
-- **Menu bar label**: toggle session %, reset time, weekly %, Sonnet % (menu dropdown checkboxes)
+- **Menu bar label**: toggle Claude session %, reset time, weekly %, model usage, plus Codex % and reset time (menu dropdown checkboxes)
 - **Inline chart period**: Off, 1H, 5H, 1D, 1W, 1M, 3M, 1Y, All
 
 ## Install via Homebrew
