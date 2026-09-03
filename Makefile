@@ -1,4 +1,4 @@
-VERSION    ?= 1.1.0
+VERSION    ?= 1.1.1
 TAG        := v$(VERSION)
 REPO       := posalex/ClaudeUsage
 CASK_PATH  := Casks/claude-usage.rb
@@ -33,27 +33,11 @@ clean:
 
 # ---------- Release ----------
 
-release: clean
-	@test "$$(git branch --show-current)" = "main" || (echo "Release must run from main"; exit 1)
-	@test -z "$$(git status --porcelain)" || (echo "Working tree is not clean"; exit 1)
-	@test -z "$$(git tag -l $(TAG))" || (echo "Tag $(TAG) already exists"; exit 1)
-	@echo "==> Pushing main..."
-	git push origin main
-	@echo "==> Tagging $(TAG)..."
-	git tag -a $(TAG) -m "Release $(VERSION)"
-	git push origin $(TAG)
-	@echo "==> Release build started on GitHub. Run 'make update-tap VERSION=$(VERSION)' after its asset is available."
+release:
+	./scripts/release.sh $(VERSION)
 
 update-tap:
-	@test -f "$(TAP_CASK)" || (echo "Tap cask not found: $(TAP_CASK)"; exit 1)
-	@TMP_DIR=$$(mktemp -d) && trap 'rm -rf "$$TMP_DIR"' EXIT && \
-		curl --fail --location --output "$$TMP_DIR/ClaudeUsage.zip" "https://github.com/$(REPO)/releases/download/$(TAG)/ClaudeUsage.zip" && \
-		NEW_SHA=$$(shasum -a 256 "$$TMP_DIR/ClaudeUsage.zip" | awk '{print $$1}') && \
-		perl -0pi -e "s/version \"[^\"]+\"/version \"$(VERSION)\"/; s/sha256 \"[^\"]+\"/sha256 \"$$NEW_SHA\"/" "$(TAP_CASK)" && \
-		brew audit --cask --strict "$(TAP_CASK)" && \
-		git -C "$(TAP_DIR)" add "$(CASK_PATH)" && \
-		git -C "$(TAP_DIR)" commit -m "Update claude-usage to $(TAG)" && \
-		git -C "$(TAP_DIR)" push origin HEAD
+	"$(TAP_DIR)/scripts/publish-claude-usage-cask.sh" $(VERSION)
 
 # ---------- Homebrew install ----------
 

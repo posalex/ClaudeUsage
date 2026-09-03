@@ -196,7 +196,7 @@ struct MenuBarView: View {
                     title: primary.title,
                     reset: primary.resetCompact,
                     percent: primary.usedPercent,
-                    color: .indigo
+                    color: .codexMagenta
                 )
             }
 
@@ -205,7 +205,7 @@ struct MenuBarView: View {
                     title: secondary.title,
                     reset: secondary.resetCompact,
                     percent: secondary.usedPercent,
-                    color: .indigo
+                    color: .codexMagenta
                 )
             }
 

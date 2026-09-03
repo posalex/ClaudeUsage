@@ -255,26 +255,50 @@ private enum CodexAppServerClient {
             }
         }
 
-        for message in requestMessages() {
-            let data = try JSONSerialization.data(withJSONObject: message)
-            input.fileHandleForWriting.write(data)
-            input.fileHandleForWriting.write(Data("\n".utf8))
+        let messages = requestMessages()
+
+        // Codex does not accept requests until it has acknowledged
+        // `initialize`. Sending all messages at once causes the current CLI
+        // to discard the rate-limit request.
+        try send(messages[0], to: input.fileHandleForWriting)
+        _ = try await waitForResponse(
+            from: output.fileHandleForReading,
+            requestID: 1
+        )
+
+        try send(messages[1], to: input.fileHandleForWriting)
+        try send(messages[2], to: input.fileHandleForWriting)
+
+        let responseData = try await waitForResponse(
+            from: output.fileHandleForReading,
+            requestID: requestID
+        )
+        let response = try JSONDecoder().decode(CodexAppServerResponse.self, from: responseData)
+        if let message = response.error?.message {
+            throw CodexAppServerError.server(message)
         }
+        guard let result = response.result else {
+            throw CodexAppServerError.invalidResponse
+        }
+        return result.rateLimitsByLimitId?["codex"] ?? result.rateLimits
+    }
 
-        return try await withThrowingTaskGroup(of: CodexRateLimitSnapshot.self) { group in
+    private static func send(_ message: [String: Any], to input: FileHandle) throws {
+        let data = try JSONSerialization.data(withJSONObject: message)
+        input.write(data)
+        input.write(Data("\n".utf8))
+    }
+
+    private static func waitForResponse(
+        from output: FileHandle,
+        requestID: Int
+    ) async throws -> Data {
+        try await withThrowingTaskGroup(of: Data.self) { group in
             group.addTask {
-                for try await line in output.fileHandleForReading.bytes.lines {
+                for try await line in output.bytes.lines {
                     let responseData = Data(line.utf8)
-                    guard Self.responseMatchesRequest(responseData) else { continue }
-
-                    let response = try JSONDecoder().decode(CodexAppServerResponse.self, from: responseData)
-                    if let message = response.error?.message {
-                        throw CodexAppServerError.server(message)
-                    }
-                    guard let result = response.result else {
-                        throw CodexAppServerError.invalidResponse
-                    }
-                    return result.rateLimitsByLimitId?["codex"] ?? result.rateLimits
+                    guard Self.responseMatchesRequest(responseData, requestID: requestID) else { continue }
+                    return responseData
                 }
                 throw CodexAppServerError.noResponse
             }
@@ -286,10 +310,10 @@ private enum CodexAppServerClient {
             }
 
             defer { group.cancelAll() }
-            guard let result = try await group.next() else {
+            guard let responseData = try await group.next() else {
                 throw CodexAppServerError.noResponse
             }
-            return result
+            return responseData
         }
     }
 
@@ -308,7 +332,7 @@ private enum CodexAppServerClient {
         ]
     }
 
-    private static func responseMatchesRequest(_ data: Data) -> Bool {
+    private static func responseMatchesRequest(_ data: Data, requestID: Int) -> Bool {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return false
         }

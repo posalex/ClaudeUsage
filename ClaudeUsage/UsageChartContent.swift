@@ -8,6 +8,11 @@ struct UsageMetricSeriesDescriptor: Hashable {
 	let color: Color
 }
 
+extension Color {
+    /// Deliberately distinct from Claude's blue session line.
+    static let codexMagenta = Color(red: 0.84, green: 0.12, blue: 0.72)
+}
+
 /// Shared chart content used by both the main app chart and the menu bar mini chart.
 /// Parameterized by line width for size adaptation.
 struct UsageChartContent: View {
@@ -189,21 +194,25 @@ struct UsageChartContent: View {
 
 	        var descriptors: [UsageMetricSeriesDescriptor] = []
 
-	        // Ensure stable, user-friendly ordering: session, weekly, then others.
+	        // Ensure stable, compact ordering for the menu-bar legend.
 	        if keys.contains("five_hour") {
-	            descriptors.append(UsageMetricSeriesDescriptor(key: "five_hour", name: L.sessionTitle, color: .blue))
+	            descriptors.append(UsageMetricSeriesDescriptor(key: "five_hour", name: L.chartClaude5h, color: .blue))
 	            keys.remove("five_hour")
 	        }
 	        if keys.contains("seven_day") {
-	            descriptors.append(UsageMetricSeriesDescriptor(key: "seven_day", name: L.weeklyTitle, color: .orange))
+	            descriptors.append(UsageMetricSeriesDescriptor(key: "seven_day", name: L.chartClaude7d, color: .orange))
 	            keys.remove("seven_day")
 	        }
+			if let fableKey = ["seven_day_fable", "fable"].first(where: keys.contains) {
+				descriptors.append(UsageMetricSeriesDescriptor(key: fableKey, name: L.chartFable7d, color: .green))
+				keys.remove(fableKey)
+			}
 			if keys.contains("codex_primary") {
-				descriptors.append(UsageMetricSeriesDescriptor(key: "codex_primary", name: L.codexUsage, color: .indigo))
+				descriptors.append(UsageMetricSeriesDescriptor(key: "codex_primary", name: L.chartCodex7d, color: .codexMagenta))
 				keys.remove("codex_primary")
 			}
 			if keys.contains("codex_secondary") {
-				descriptors.append(UsageMetricSeriesDescriptor(key: "codex_secondary", name: "\(L.codexUsage) 2", color: .teal))
+				descriptors.append(UsageMetricSeriesDescriptor(key: "codex_secondary", name: "\(L.codexUsage) 2", color: .codexMagenta.opacity(0.6)))
 				keys.remove("codex_secondary")
 			}
 

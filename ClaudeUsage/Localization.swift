@@ -90,6 +90,10 @@ enum L {
     static var noUsageDataYet: String { loc("No usage data yet") }
     static var dataWillAppear: String { loc("Data will appear here as usage is tracked over time.") }
     static var noDataForPeriod: String { loc("No data for this period") }
+    static var chartClaude5h: String { loc("Claude 5h") }
+    static var chartClaude7d: String { loc("Claude 7d") }
+    static var chartFable7d: String { loc("Fable 7d") }
+    static var chartCodex7d: String { loc("Codex 7d") }
 
     // Login
     static var logInToClaude: String { loc("Log in to Claude") }
@@ -135,6 +139,7 @@ enum L {
     static var restartToApply: String { loc("Restart to apply language change") }
     static var restartNow: String { loc("Restart Now") }
     static var org: String { loc("Org:") }
+    static var version: String { loc("Version") }
 
     // Codex
     static var codexUsage: String { loc("Codex Usage") }

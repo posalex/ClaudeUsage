@@ -170,6 +170,12 @@ struct ContentView: View {
                 }
             }
 
+            settingRow(L.version) {
+                Text(appVersion)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+
             // Refresh interval
             settingRow(L.refreshInterval) {
                 refreshIntervalPicker
@@ -254,6 +260,10 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
             content()
         }
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
     }
 
     private func displayToggle(_ title: String, isOn: Binding<Bool>) -> some View {
@@ -472,7 +482,7 @@ struct ContentView: View {
                             title: primary.title,
                             percent: primary.usedPercent,
                             resetLabel: primary.resetLabel,
-                            color: .indigo
+                            color: .codexMagenta
                         )
                     }
 
@@ -481,7 +491,7 @@ struct ContentView: View {
                             title: secondary.title,
                             percent: secondary.usedPercent,
                             resetLabel: secondary.resetLabel,
-                            color: .indigo
+                            color: .codexMagenta
                         )
                     }
                 }
