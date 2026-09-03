@@ -1,6 +1,6 @@
 # ClaudeUsage — macOS Menu Bar Utility
 
-A macOS menu bar app that shows your Claude and Codex subscription usage and rate limits at a glance.
+A macOS menu bar app that shows Claude, Fable, and Codex subscription usage and rate limits at a glance.
 
 ## Screenshots
 
@@ -89,7 +89,7 @@ To reopen the main window, click **Open Claude Usage** in the menu dropdown (or 
 ## Configuration
 
 - **Refresh interval**: 1–30 minutes (Settings in main window)
-- **Menu bar label**: toggle Claude session %, reset time, weekly %, model usage, plus Codex % and reset time (menu dropdown checkboxes)
+- **Menu bar label**: toggle Claude session %, reset time, weekly %, Fable %, Fable reset time, model usage, plus Codex % and reset time (menu dropdown checkboxes)
 - **Inline chart period**: Off, 1H, 5H, 1D, 1W, 1M, 3M, 1Y, All
 
 ## Install via Homebrew
@@ -117,7 +117,7 @@ xattr -d com.apple.quarantine /Applications/ClaudeUsage.app
 | `make install` | `brew tap` + `brew install` + remove quarantine |
 | `make reinstall` | Fresh tap + reinstall + remove quarantine |
 
-Bump the version with `make release VERSION=1.1.0`.
+Run `make release VERSION=1.1.0` from a clean `main` branch. It creates a new tag and release, then updates the local `../homebrew-tap` checkout. Existing tags and releases are never replaced.
 
 ## License
 

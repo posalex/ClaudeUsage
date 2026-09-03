@@ -17,18 +17,23 @@ jobs:
 
       - name: Generate & Build
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
           xcodegen generate
           xcodebuild -project ClaudeUsage.xcodeproj \
             -scheme ClaudeUsage \
             -configuration Release \
             -derivedDataPath build \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
             CODE_SIGN_IDENTITY="-" \
             build
 
       - name: Package
         run: |
           cd build/Build/Products/Release
-          zip -r ClaudeUsage.zip ClaudeUsage.app
+          ditto -c -k --keepParent ClaudeUsage.app ClaudeUsage.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

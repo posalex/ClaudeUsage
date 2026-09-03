@@ -4,6 +4,7 @@
 # Xcode user-specific data
 *.xcuserstate
 xcuserdata/
+.idea/
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 

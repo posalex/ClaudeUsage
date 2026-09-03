@@ -1,8 +1,9 @@
-VERSION    ?= 1.0.0
+VERSION    ?= 1.1.0
 TAG        := v$(VERSION)
 REPO       := posalex/ClaudeUsage
-TAP_REPO   := posalex/homebrew-tap
 CASK_PATH  := Casks/claude-usage.rb
+TAP_DIR    ?= ../homebrew-tap
+TAP_CASK   := $(TAP_DIR)/$(CASK_PATH)
 
 .PHONY: build run clean release update-tap install reinstall
 
@@ -14,6 +15,8 @@ build:
 		-scheme ClaudeUsage \
 		-configuration Release \
 		-derivedDataPath build \
+		ARCHS=arm64 \
+		ONLY_ACTIVE_ARCH=YES \
 		build
 
 run:
@@ -31,14 +34,13 @@ clean:
 # ---------- Release ----------
 
 release: clean
-	@echo "==> Pushing commits..."
+	@test "$$(git branch --show-current)" = "main" || (echo "Release must run from main"; exit 1)
+	@test -z "$$(git status --porcelain)" || (echo "Working tree is not clean"; exit 1)
+	@test -z "$$(git tag -l $(TAG))" || (echo "Tag $(TAG) already exists"; exit 1)
+	@echo "==> Pushing main..."
 	git push origin main
-	@echo "==> Deleting old tag/release $(TAG)..."
-	-git tag -d $(TAG) 2>/dev/null
-	-git push --delete origin $(TAG) 2>/dev/null
-	-gh release delete $(TAG) --repo $(REPO) --yes 2>/dev/null
 	@echo "==> Tagging $(TAG)..."
-	git tag $(TAG)
+	git tag -a $(TAG) -m "Release $(VERSION)"
 	git push origin $(TAG)
 	@echo "==> Waiting for release build..."
 	@RUN_ID=$$(sleep 2 && gh run list --repo $(REPO) --limit 1 --json databaseId --jq '.[0].databaseId') && \
@@ -47,46 +49,16 @@ release: clean
 		echo "==> Release build complete."
 	@$(MAKE) update-tap
 
-define CASK_TEMPLATE
-cask "claude-usage" do
-  version "CASK_VERSION"
-  sha256 "CASK_SHA"
-
-  url "https://github.com/CASK_REPO/releases/download/vCASK_URL_VERSION/ClaudeUsage.zip"
-  name "Claude Usage"
-  desc "macOS menu bar widget showing claude.ai subscription usage and rate limits"
-  homepage "https://github.com/CASK_REPO"
-
-  depends_on macos: ">= :ventura"
-
-  app "ClaudeUsage.app"
-
-  caveats <<~EOS
-    The app is not notarized. macOS will block it on first launch.
-    Run this to allow it:
-      xattr -d com.apple.quarantine /Applications/ClaudeUsage.app
-  EOS
-
-  zap trash: [
-    "~/Library/Preferences/com.github.posalex.claudeusage.plist",
-    "~/Library/Application Support/ClaudeUsage",
-  ]
-end
-endef
-export CASK_TEMPLATE
-
 update-tap:
-	@echo "==> Fetching SHA256 from release..."
-	@NEW_SHA=$$(gh release view $(TAG) --repo $(REPO) --json assets --jq '.assets[0].digest' | sed 's/sha256://') && \
-	FILE_SHA=$$(gh api repos/$(TAP_REPO)/contents/$(CASK_PATH) --jq '.sha') && \
-	CONTENT=$$(echo "$$CASK_TEMPLATE" | sed "s/CASK_VERSION/$(VERSION)/;s/CASK_SHA/$$NEW_SHA/;s|CASK_REPO|$(REPO)|g;s/CASK_URL_VERSION/#{version}/" | base64) && \
-	gh api repos/$(TAP_REPO)/contents/$(CASK_PATH) \
-		-X PUT \
-		-f message="Update cask to $(TAG)" \
-		-f content="$$CONTENT" \
-		-f sha="$$FILE_SHA" \
-		--jq '.commit.sha' && \
-	echo "==> Tap updated with SHA $$NEW_SHA"
+	@test -f "$(TAP_CASK)" || (echo "Tap cask not found: $(TAP_CASK)"; exit 1)
+	@TMP_DIR=$$(mktemp -d) && trap 'rm -rf "$$TMP_DIR"' EXIT && \
+		gh release download $(TAG) --repo $(REPO) --pattern ClaudeUsage.zip --dir "$$TMP_DIR" && \
+		NEW_SHA=$$(shasum -a 256 "$$TMP_DIR/ClaudeUsage.zip" | awk '{print $$1}') && \
+		perl -0pi -e "s/version \"[^\"]+\"/version \"$(VERSION)\"/; s/sha256 \"[^\"]+\"/sha256 \"$$NEW_SHA\"/" "$(TAP_CASK)" && \
+		brew audit --cask --strict "$(TAP_CASK)" && \
+		git -C "$(TAP_DIR)" add "$(CASK_PATH)" && \
+		git -C "$(TAP_DIR)" commit -m "Update claude-usage to $(TAG)" && \
+		git -C "$(TAP_DIR)" push origin HEAD
 
 # ---------- Homebrew install ----------
 
