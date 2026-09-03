@@ -239,6 +239,7 @@ private enum CodexAppServerClient {
         let process = Process()
         process.executableURL = executableURL
         process.arguments = ["app-server", "--stdio"]
+        process.environment = environmentForCodexCLI(executableURL: executableURL)
 
         let input = Pipe()
         let output = Pipe()
@@ -287,6 +288,32 @@ private enum CodexAppServerClient {
         let data = try JSONSerialization.data(withJSONObject: message)
         input.write(data)
         input.write(Data("\n".utf8))
+    }
+
+    /// Apps launched by Finder receive a minimal PATH. The Codex executable
+    /// installed by Homebrew is a Node script (`/usr/bin/env node`), so its
+    /// interpreter is otherwise not discoverable even when the CLI itself was
+    /// found at an absolute path.
+    private static func environmentForCodexCLI(executableURL: URL) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        let inheritedPaths = environment["PATH"]?.split(separator: ":").map(String.init) ?? []
+        let preferredPaths = [
+            executableURL.deletingLastPathComponent().path,
+            "/opt/homebrew/bin",
+            "/usr/local/bin",
+            "\(NSHomeDirectory())/.local/bin",
+            "/usr/bin",
+            "/bin",
+            "/usr/sbin",
+            "/sbin"
+        ]
+
+        var paths: [String] = []
+        for path in preferredPaths + inheritedPaths where !path.isEmpty && !paths.contains(path) {
+            paths.append(path)
+        }
+        environment["PATH"] = paths.joined(separator: ":")
+        return environment
     }
 
     private static func throwIfServerError(in data: Data) throws {
