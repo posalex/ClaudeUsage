@@ -248,7 +248,12 @@ private enum CodexAppServerClient {
 
         try process.run()
 
+        let responseReader = CodexAppServerResponseReader(
+            output: output.fileHandleForReading
+        )
+
         defer {
+            responseReader.stop()
             input.fileHandleForWriting.closeFile()
             if process.isRunning {
                 process.terminate()
@@ -261,18 +266,13 @@ private enum CodexAppServerClient {
         // `initialize`. Sending all messages at once causes the current CLI
         // to discard the rate-limit request.
         try send(messages[0], to: input.fileHandleForWriting)
-        _ = try await waitForResponse(
-            from: output.fileHandleForReading,
-            requestID: 1
-        )
+        let initializationResponse = try await responseReader.response(for: 1)
+        try throwIfServerError(in: initializationResponse)
 
         try send(messages[1], to: input.fileHandleForWriting)
         try send(messages[2], to: input.fileHandleForWriting)
 
-        let responseData = try await waitForResponse(
-            from: output.fileHandleForReading,
-            requestID: requestID
-        )
+        let responseData = try await responseReader.response(for: requestID)
         let response = try JSONDecoder().decode(CodexAppServerResponse.self, from: responseData)
         if let message = response.error?.message {
             throw CodexAppServerError.server(message)
@@ -289,32 +289,15 @@ private enum CodexAppServerClient {
         input.write(Data("\n".utf8))
     }
 
-    private static func waitForResponse(
-        from output: FileHandle,
-        requestID: Int
-    ) async throws -> Data {
-        try await withThrowingTaskGroup(of: Data.self) { group in
-            group.addTask {
-                for try await line in output.bytes.lines {
-                    let responseData = Data(line.utf8)
-                    guard Self.responseMatchesRequest(responseData, requestID: requestID) else { continue }
-                    return responseData
-                }
-                throw CodexAppServerError.noResponse
-            }
-
-            group.addTask {
-                try await Task.sleep(nanoseconds: 15_000_000_000)
-                try Task.checkCancellation()
-                throw CodexAppServerError.timedOut
-            }
-
-            defer { group.cancelAll() }
-            guard let responseData = try await group.next() else {
-                throw CodexAppServerError.noResponse
-            }
-            return responseData
+    private static func throwIfServerError(in data: Data) throws {
+        guard
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let error = json["error"] as? [String: Any],
+            let message = error["message"] as? String
+        else {
+            return
         }
+        throw CodexAppServerError.server(message)
     }
 
     private static func requestMessages() -> [[String: Any]] {
@@ -332,11 +315,119 @@ private enum CodexAppServerClient {
         ]
     }
 
-    private static func responseMatchesRequest(_ data: Data, requestID: Int) -> Bool {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return false
+}
+
+/// Keeps a single reader attached to the app server's stdout for the entire
+/// JSON-RPC session. Re-creating `FileHandle.AsyncBytes` after `initialize`
+/// can cancel its underlying read source in optimized app builds, leaving the
+/// subsequent rate-limit response unread.
+private final class CodexAppServerResponseReader: @unchecked Sendable {
+    private let output: FileHandle
+    private let queue = DispatchQueue(label: "com.github.posalex.claudeusage.codex-reader")
+    private var readSource: DispatchSourceRead?
+    private var buffer = Data()
+    private var bufferedResponses: [Int: Data] = [:]
+    private var waiters: [Int: CheckedContinuation<Data, Error>] = [:]
+    private var isStopped = false
+
+    init(output: FileHandle) {
+        self.output = output
+
+        let source = DispatchSource.makeReadSource(
+            fileDescriptor: output.fileDescriptor,
+            queue: queue
+        )
+        readSource = source
+        source.setEventHandler { [weak self] in
+            self?.readAvailableData()
         }
-        return json["id"] as? Int == requestID
+        source.resume()
+    }
+
+    deinit {
+        stop()
+    }
+
+    func response(for requestID: Int) async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async { [weak self] in
+                guard let self else {
+                    continuation.resume(throwing: CodexAppServerError.noResponse)
+                    return
+                }
+
+                if let response = self.bufferedResponses.removeValue(forKey: requestID) {
+                    continuation.resume(returning: response)
+                    return
+                }
+
+                guard !self.isStopped else {
+                    continuation.resume(throwing: CodexAppServerError.noResponse)
+                    return
+                }
+
+                self.waiters[requestID] = continuation
+                self.queue.asyncAfter(deadline: .now() + 15) { [weak self] in
+                    self?.timeout(requestID: requestID)
+                }
+            }
+        }
+    }
+
+    func stop() {
+        queue.sync {
+            guard !isStopped else { return }
+            isStopped = true
+            readSource?.cancel()
+            readSource = nil
+            failPendingResponses(with: CodexAppServerError.noResponse)
+        }
+    }
+
+    private func readAvailableData() {
+        guard !isStopped else { return }
+
+        let data = output.availableData
+        guard !data.isEmpty else {
+            isStopped = true
+            readSource?.cancel()
+            readSource = nil
+            failPendingResponses(with: CodexAppServerError.noResponse)
+            return
+        }
+
+        buffer.append(data)
+        while let newlineIndex = buffer.firstIndex(of: 0x0A) {
+            let line = Data(buffer[..<newlineIndex])
+            buffer.removeSubrange(...newlineIndex)
+            receive(line: line)
+        }
+    }
+
+    private func receive(line: Data) {
+        guard let json = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            return
+        }
+        guard let requestID = json["id"] as? Int else { return }
+
+        if let continuation = waiters.removeValue(forKey: requestID) {
+            continuation.resume(returning: line)
+        } else {
+            bufferedResponses[requestID] = line
+        }
+    }
+
+    private func timeout(requestID: Int) {
+        guard let continuation = waiters.removeValue(forKey: requestID) else { return }
+        continuation.resume(throwing: CodexAppServerError.timedOut)
+    }
+
+    private func failPendingResponses(with error: Error) {
+        let pending = waiters.values
+        waiters.removeAll()
+        for continuation in pending {
+            continuation.resume(throwing: error)
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-VERSION    ?= 1.1.1
+VERSION    ?= 1.1.2
 TAG        := v$(VERSION)
 REPO       := posalex/ClaudeUsage
 CASK_PATH  := Casks/claude-usage.rb
