@@ -342,54 +342,76 @@ extension UsageDisplayData {
         var parts: [String] = []
 
         // Session section
-        var sessionParts: [String] = []
-        if pref(SharedDefaults.menuBarShowSessionPercentKey, default: true) {
-            sessionParts.append("\(Int(sessionPercent))%")
+        let sessionPercentText = pref(SharedDefaults.menuBarShowSessionPercentKey, default: true)
+            ? "\(Int(sessionPercent))%" : nil
+        let sessionResetText = pref(SharedDefaults.menuBarShowSessionResetKey, default: true)
+            ? sessionResetCompact : nil
+        if let sessionPart = MenuBarTextFormat.render(
+            template: MenuBarTextFormat.template(
+                for: SharedDefaults.menuBarSessionFormatKey,
+                default: MenuBarTextFormat.sessionDefault
+            ),
+            percent: sessionPercentText,
+            reset: sessionResetText
+        ) {
+            parts.append(sessionPart)
         }
-        if pref(SharedDefaults.menuBarShowSessionResetKey, default: true) {
-            sessionParts.append(sessionResetCompact)
-        }
-        if !sessionParts.isEmpty { parts.append(sessionParts.joined(separator: " ")) }
 
         // Weekly section
-        var weeklyParts: [String] = []
-        if pref(SharedDefaults.menuBarShowWeeklyPercentKey, default: false) {
-            weeklyParts.append("W:\(Int(weeklyPercent))%")
+        let weeklyPercentText = pref(SharedDefaults.menuBarShowWeeklyPercentKey, default: false)
+            ? "\(Int(weeklyPercent))%" : nil
+        let weeklyResetText = pref(SharedDefaults.menuBarShowWeeklyResetKey, default: false)
+            ? weeklyResetCompact : nil
+        if let weeklyPart = MenuBarTextFormat.render(
+            template: MenuBarTextFormat.template(
+                for: SharedDefaults.menuBarWeeklyFormatKey,
+                default: MenuBarTextFormat.weeklyDefault
+            ),
+            percent: weeklyPercentText,
+            reset: weeklyResetText
+        ) {
+            parts.append(weeklyPart)
         }
-        if pref(SharedDefaults.menuBarShowWeeklyResetKey, default: false) {
-            weeklyParts.append(weeklyResetCompact)
-        }
-        if !weeklyParts.isEmpty { parts.append(weeklyParts.joined(separator: " ")) }
 
 		// Fable has an independent Claude Code limit. It uses dedicated
 		// preferences so adding Fable does not change an existing Sonnet setup.
 		if let fable = weeklyFablePercent {
-			var fableParts: [String] = []
-			if pref(SharedDefaults.menuBarShowFablePercentKey, default: false) {
-				fableParts.append("F:\(Int(fable))%")
+			let fablePercentText = pref(SharedDefaults.menuBarShowFablePercentKey, default: false)
+				? "\(Int(fable))%" : nil
+			let fableResetText = pref(SharedDefaults.menuBarShowFableResetKey, default: false)
+				? fableResetCompact : nil
+			if let fablePart = MenuBarTextFormat.render(
+				template: MenuBarTextFormat.template(
+					for: SharedDefaults.menuBarFableFormatKey,
+					default: MenuBarTextFormat.fableDefault
+				),
+				percent: fablePercentText,
+				reset: fableResetText
+			) {
+				parts.append(fablePart)
 			}
-			if pref(SharedDefaults.menuBarShowFableResetKey, default: false),
-			   let reset = fableResetCompact {
-				fableParts.append(reset)
-			}
-			if !fableParts.isEmpty { parts.append(fableParts.joined(separator: " ")) }
 		}
 
         // Sonnet section
         if let sonnet = weeklySonnetPercent {
-            var sonnetParts: [String] = []
-            if pref(SharedDefaults.menuBarShowSonnetPercentKey, default: false) {
-				let code = highlightedModelShortCode ?? "S"
-				sonnetParts.append("\(code):\(Int(sonnet))%")
+            let sonnetPercentText = pref(SharedDefaults.menuBarShowSonnetPercentKey, default: false)
+                ? "\(Int(sonnet))%" : nil
+            let sonnetResetText = pref(SharedDefaults.menuBarShowSonnetResetKey, default: false)
+                ? sonnetResetCompact : nil
+            if let sonnetPart = MenuBarTextFormat.render(
+                template: MenuBarTextFormat.template(
+                    for: SharedDefaults.menuBarSonnetFormatKey,
+                    default: MenuBarTextFormat.sonnetDefault
+                ),
+                percent: sonnetPercentText,
+                reset: sonnetResetText,
+                model: sonnetPercentText == nil ? nil : highlightedModelShortCode ?? "S"
+            ) {
+                parts.append(sonnetPart)
             }
-            if pref(SharedDefaults.menuBarShowSonnetResetKey, default: false),
-               let reset = sonnetResetCompact {
-                sonnetParts.append(reset)
-            }
-            if !sonnetParts.isEmpty { parts.append(sonnetParts.joined(separator: " ")) }
         }
 
-        return parts.isEmpty ? "—" : parts.joined(separator: "  ·  ")
+        return parts.isEmpty ? "—" : parts.joined(separator: MenuBarTextFormat.delimiter)
     }
 }
 

@@ -36,6 +36,18 @@ struct ContentView: View {
     private var showCodexPercent: Bool = true
     @AppStorage(SharedDefaults.menuBarShowCodexResetKey)
     private var showCodexReset: Bool = true
+    @AppStorage(SharedDefaults.menuBarSessionFormatKey)
+    private var sessionFormat = MenuBarTextFormat.sessionDefault
+    @AppStorage(SharedDefaults.menuBarWeeklyFormatKey)
+    private var weeklyFormat = MenuBarTextFormat.weeklyDefault
+    @AppStorage(SharedDefaults.menuBarSonnetFormatKey)
+    private var sonnetFormat = MenuBarTextFormat.sonnetDefault
+    @AppStorage(SharedDefaults.menuBarFableFormatKey)
+    private var fableFormat = MenuBarTextFormat.fableDefault
+    @AppStorage(SharedDefaults.menuBarCodexFormatKey)
+    private var codexFormat = MenuBarTextFormat.codexDefault
+    @AppStorage(SharedDefaults.menuBarDelimiterKey)
+    private var menuBarDelimiter = MenuBarTextFormat.delimiterDefault
 
     // Menu bar chart period
     @AppStorage(SharedDefaults.menuBarChartPeriodKey)
@@ -209,6 +221,8 @@ struct ContentView: View {
                 }
             }
 
+            menuBarFormatEditor
+
             settingRow(L.codexUsage) {
                 if codexFetcher.isAvailable {
                     HStack(spacing: 6) {
@@ -272,6 +286,52 @@ struct ContentView: View {
                 .font(.system(size: 12))
         }
         .toggleStyle(.checkbox)
+    }
+
+    private var menuBarFormatEditor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L.menuBarFormat)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            Text(L.menuBarFormatHint)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            LazyVGrid(columns: [
+                GridItem(.flexible(), alignment: .leading),
+                GridItem(.flexible(), alignment: .leading)
+            ], spacing: 8) {
+                formatField(L.sessionTitle, value: $sessionFormat)
+                formatField(L.weeklyTitle, value: $weeklyFormat)
+                formatField(L.fableTitle, value: $fableFormat)
+                formatField(L.sonnetTitle, value: $sonnetFormat)
+                formatField(L.codexUsage, value: $codexFormat)
+                formatField(L.menuBarDelimiter, value: $menuBarDelimiter)
+            }
+
+            Button(L.resetFormats) {
+                sessionFormat = MenuBarTextFormat.sessionDefault
+                weeklyFormat = MenuBarTextFormat.weeklyDefault
+                sonnetFormat = MenuBarTextFormat.sonnetDefault
+                fableFormat = MenuBarTextFormat.fableDefault
+                codexFormat = MenuBarTextFormat.codexDefault
+                menuBarDelimiter = MenuBarTextFormat.delimiterDefault
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
+    private func formatField(_ title: String, value: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField("", text: value)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 11, design: .monospaced))
+        }
     }
 
     // MARK: - Restart

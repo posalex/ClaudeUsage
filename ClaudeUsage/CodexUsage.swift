@@ -72,23 +72,25 @@ struct CodexUsageDisplayData: Codable {
         var parts: [String] = []
 
         func append(_ window: CodexUsageWindow) {
-            let prefix = window.durationLabel.isEmpty ? "C" : "C\(window.durationLabel)"
-            var windowParts: [String] = []
-            if showPercent {
-                windowParts.append("\(prefix):\(Int(window.usedPercent))%")
-            }
-            if showReset {
-                windowParts.append(window.resetCompact)
-            }
-            if !windowParts.isEmpty {
-                parts.append(windowParts.joined(separator: " "))
+            let percent = showPercent ? "\(Int(window.usedPercent))%" : nil
+            let reset = showReset ? window.resetCompact : nil
+            if let part = MenuBarTextFormat.render(
+                template: MenuBarTextFormat.template(
+                    for: SharedDefaults.menuBarCodexFormatKey,
+                    default: MenuBarTextFormat.codexDefault
+                ),
+                percent: percent,
+                reset: reset,
+                duration: percent == nil ? nil : window.durationLabel
+            ) {
+                parts.append(part)
             }
         }
 
         if let primary { append(primary) }
         if let secondary { append(secondary) }
 
-        return parts.isEmpty ? nil : parts.joined(separator: " ")
+        return parts.isEmpty ? nil : parts.joined(separator: MenuBarTextFormat.delimiter)
     }
 }
 

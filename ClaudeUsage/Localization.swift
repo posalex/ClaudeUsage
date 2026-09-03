@@ -69,6 +69,9 @@ enum L {
     // Section headers
     static var usageChart: String { loc("USAGE CHART") }
     static var menuBarDisplay: String { loc("MENU BAR DISPLAY") }
+    static var menuBarFormat: String { loc("MENU BAR FORMAT") }
+    static var menuBarDelimiter: String { loc("Delimiter") }
+    static var menuBarFormatHint: String { loc("Use {percent}, {reset}, {duration}, and {model} for live values.") }
     static var refreshInterval: String { loc("REFRESH INTERVAL") }
     static var language: String { loc("LANGUAGE") }
 
@@ -140,6 +143,7 @@ enum L {
     static var restartNow: String { loc("Restart Now") }
     static var org: String { loc("Org:") }
     static var version: String { loc("Version") }
+    static var resetFormats: String { loc("Reset formats") }
 
     // Codex
     static var codexUsage: String { loc("Codex Usage") }
@@ -218,6 +222,9 @@ extension L {
             "Open the app to log in": "App öffnen zum Anmelden",
             "USAGE CHART": "NUTZUNGSDIAGRAMM",
             "MENU BAR DISPLAY": "MENÜLEISTE",
+            "MENU BAR FORMAT": "MENÜLEISTENFORMAT",
+            "Delimiter": "Trennzeichen",
+            "Use {percent}, {reset}, {duration}, and {model} for live values.": "Mit {percent}, {reset}, {duration} und {model} werden Live-Werte eingefügt.",
             "REFRESH INTERVAL": "AKTUALISIERUNG",
             "LANGUAGE": "SPRACHE",
             "Session %": "Sitzung %",
@@ -271,6 +278,7 @@ extension L {
             "Restart to apply language change": "Neustart für Sprachwechsel erforderlich",
             "Restart Now": "Jetzt neu starten",
             "Org:": "Org:",
+            "Reset formats": "Formate zurücksetzen",
             "Codex Usage": "Codex Nutzung",
             "Connected through Codex CLI": "Über Codex CLI verbunden",
             "Codex CLI is not installed": "Codex CLI ist nicht installiert",

@@ -1,4 +1,4 @@
-VERSION    ?= 1.1.3
+VERSION    ?= 1.1.4
 TAG        := v$(VERSION)
 REPO       := posalex/ClaudeUsage
 CASK_PATH  := Casks/claude-usage.rb
@@ -17,6 +17,8 @@ build:
 		-derivedDataPath build \
 		ARCHS=arm64 \
 		ONLY_ACTIVE_ARCH=YES \
+		CODE_SIGN_IDENTITY=- \
+		CODE_SIGN_STYLE=Manual \
 		build
 
 run:
@@ -25,6 +27,8 @@ run:
 		-scheme ClaudeUsage \
 		-configuration Debug \
 		-derivedDataPath build \
+		CODE_SIGN_IDENTITY=- \
+		CODE_SIGN_STYLE=Manual \
 		build
 	open build/Build/Products/Debug/ClaudeUsage.app
 

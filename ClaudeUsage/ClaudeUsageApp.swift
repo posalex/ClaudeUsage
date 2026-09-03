@@ -53,18 +53,26 @@ struct MenuBarLabel: View {
     @AppStorage(SharedDefaults.menuBarShowFableResetKey) private var _fr = false
     @AppStorage(SharedDefaults.menuBarShowCodexPercentKey) private var _cp = true
     @AppStorage(SharedDefaults.menuBarShowCodexResetKey) private var _cr = true
+    @AppStorage(SharedDefaults.menuBarSessionFormatKey) private var _sessionFormat = MenuBarTextFormat.sessionDefault
+    @AppStorage(SharedDefaults.menuBarWeeklyFormatKey) private var _weeklyFormat = MenuBarTextFormat.weeklyDefault
+    @AppStorage(SharedDefaults.menuBarSonnetFormatKey) private var _sonnetFormat = MenuBarTextFormat.sonnetDefault
+    @AppStorage(SharedDefaults.menuBarFableFormatKey) private var _fableFormat = MenuBarTextFormat.fableDefault
+    @AppStorage(SharedDefaults.menuBarCodexFormatKey) private var _codexFormat = MenuBarTextFormat.codexDefault
+    @AppStorage(SharedDefaults.menuBarDelimiterKey) private var _delimiter = MenuBarTextFormat.delimiterDefault
 
     var body: some View {
-        let _ = (_lang, _sp, _sr, _wp, _wr, _snp, _snr, _fp, _fr, _cp, _cr)
+        let _ = (_lang, _sp, _sr, _wp, _wr, _snp, _snr, _fp, _fr, _cp, _cr,
+                 _sessionFormat, _weeklyFormat, _sonnetFormat, _fableFormat, _codexFormat, _delimiter)
         let labels = [
             fetcher.isLoggedIn ? fetcher.usageData.menuBarLabel() : nil,
             codexFetcher.usageData.menuBarLabel()
         ].compactMap { $0 }
-        let label = labels.isEmpty ? "—" : labels.joined(separator: "  ·  ")
-        HStack(spacing: 3) {
+        let label = labels.isEmpty ? "—" : labels.joined(separator: _delimiter)
+        HStack(spacing: 1) {
             Image(systemName: "sparkle")
                 .imageScale(.small)
             Text(label)
+                .font(.system(size: 12, weight: .medium))
                 .monospacedDigit()
         }
     }
