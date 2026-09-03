@@ -42,17 +42,12 @@ release: clean
 	@echo "==> Tagging $(TAG)..."
 	git tag -a $(TAG) -m "Release $(VERSION)"
 	git push origin $(TAG)
-	@echo "==> Waiting for release build..."
-	@RUN_ID=$$(sleep 2 && gh run list --repo $(REPO) --limit 1 --json databaseId --jq '.[0].databaseId') && \
-		echo "==> Watching run $$RUN_ID..." && \
-		gh run watch $$RUN_ID --repo $(REPO) && \
-		echo "==> Release build complete."
-	@$(MAKE) update-tap
+	@echo "==> Release build started on GitHub. Run 'make update-tap VERSION=$(VERSION)' after its asset is available."
 
 update-tap:
 	@test -f "$(TAP_CASK)" || (echo "Tap cask not found: $(TAP_CASK)"; exit 1)
 	@TMP_DIR=$$(mktemp -d) && trap 'rm -rf "$$TMP_DIR"' EXIT && \
-		gh release download $(TAG) --repo $(REPO) --pattern ClaudeUsage.zip --dir "$$TMP_DIR" && \
+		curl --fail --location --output "$$TMP_DIR/ClaudeUsage.zip" "https://github.com/$(REPO)/releases/download/$(TAG)/ClaudeUsage.zip" && \
 		NEW_SHA=$$(shasum -a 256 "$$TMP_DIR/ClaudeUsage.zip" | awk '{print $$1}') && \
 		perl -0pi -e "s/version \"[^\"]+\"/version \"$(VERSION)\"/; s/sha256 \"[^\"]+\"/sha256 \"$$NEW_SHA\"/" "$(TAP_CASK)" && \
 		brew audit --cask --strict "$(TAP_CASK)" && \

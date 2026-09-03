@@ -117,7 +117,7 @@ xattr -d com.apple.quarantine /Applications/ClaudeUsage.app
 | `make install` | `brew tap` + `brew install` + remove quarantine |
 | `make reinstall` | Fresh tap + reinstall + remove quarantine |
 
-Run `make release VERSION=1.1.0` from a clean `main` branch. It creates a new tag and release, then updates the local `../homebrew-tap` checkout. Existing tags and releases are never replaced.
+Run `make release VERSION=1.1.0` from a clean `main` branch. It pushes a new tag and starts the GitHub release workflow; after the ZIP is available, run `make update-tap VERSION=1.1.0` to update the local `../homebrew-tap` checkout. Existing tags and releases are never replaced.
 
 ## License
 
